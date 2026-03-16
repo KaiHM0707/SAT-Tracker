@@ -5,10 +5,6 @@ from openai import OpenAI
 app = Flask(__name__)
 FILE = "scores.json"
 
-# ---------------------------------------------------------------------------
-# Score persistence
-# ---------------------------------------------------------------------------
-
 def load_scores():
     if not os.path.exists(FILE):
         return []
@@ -21,10 +17,6 @@ def load_scores():
 def save_scores(data):
     with open(FILE, "w") as f:
         json.dump(data, f, indent=4)
-
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
 
 @app.route("/")
 def index():
@@ -61,7 +53,7 @@ def add_score():
 
     entry = {"test": test, "math": math, "rw": rw, "total": total, "note": note}
 
-    # --- AI feedback ---
+    #AI feedback
     ai_feedback = None
     if api_key:
         try:
