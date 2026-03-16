@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SAT Score Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:       #07080f;
+  --s1:       #0e0f1a;
+  --s2:       #141522;
+  --border:   rgba(255,255,255,0.07);
+  --border2:  rgba(255,255,255,0.12);
+  --text:     #e8eaf6;
+  --muted:    #555870;
+  --acc:      #7c6dfa;   /* violet */
+  --acc2:     #fa6d9a;   /* pink   */
+  --acc3:     #6dfabc;   /* mint   */
+  --warn:     #fabc6d;   /* amber  */
+  --r: 14px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ─── noise & blobs ─── */
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  pointer-events: none; z-index: 9999;
+}
+
+.blob { position: fixed; border-radius: 50%; filter: blur(110px); pointer-events: none; z-index: 0; }
+.b1 { width: 600px; height: 600px; background: rgba(124,109,250,0.07); top: -200px; right: -100px; }
+.b2 { width: 400px; height: 400px; background: rgba(250,109,154,0.05); bottom: -100px; left: -100px; }
+
+/* ─── layout ─── */
+.wrap { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; padding: 48px 24px 80px; }
+
+/* ─── header ─── */
+header {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  margin-bottom: 52px; flex-wrap: wrap; gap: 20px;
+}
+
+.logo-area { display: flex; flex-direction: column; gap: 6px; }
+
+.logo-tag {
+  font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--acc); display: flex; align-items: center; gap: 8px;
+}
+.logo-tag::before {
+  content: ''; display: inline-block; width: 20px; height: 1px; background: var(--acc);
+}
+
+h1 {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(44px, 7vw, 82px);
+  font-weight: 800; line-height: 0.92;
+  letter-spacing: -0.02em;
+}
+h1 em { font-style: normal; color: var(--acc); }
+
+.header-right { text-align: right; }
+.hstat-val {
+  font-family: 'Syne', sans-serif; font-size: 56px; font-weight: 800;
+  line-height: 1; color: var(--acc3);
+}
+.hstat-lbl { font-size: 10px; letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase; margin-top: 2px; }
+
+/* ─── api key banner ─── */
+.key-banner {
+  background: var(--s1); border: 1px solid rgba(124,109,250,0.25);
+  border-radius: var(--r); padding: 16px 20px;
+  display: flex; align-items: center; gap: 14px;
+  margin-bottom: 24px; flex-wrap: wrap;
+  animation: fadeUp .4s ease both;
+}
+.key-banner label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.key-banner input {
+  flex: 1; min-width: 240px;
+  background: var(--s2); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); font-family: inherit;
+  font-size: 12px; padding: 8px 12px; outline: none;
+  transition: border-color .2s;
+}
+.key-banner input:focus { border-color: var(--acc); }
+.key-note { font-size: 10px; color: var(--muted); }
+.key-note span { color: var(--acc3); }
+
+/* ─── countdown banner ─── */
+.countdown-banner {
+  background: var(--s1); border: 1px solid rgba(250,188,109,0.25);
+  border-radius: var(--r); padding: 18px 22px;
+  display: flex; align-items: center; gap: 20px;
+  margin-bottom: 24px; flex-wrap: wrap;
+  animation: fadeUp .4s ease .05s both;
+}
+.cd-set { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.cd-set label { font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.cd-set input[type=date] {
+  background: var(--s2); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); font-family: inherit;
+  font-size: 12px; padding: 8px 12px; outline: none; width: auto;
+  transition: border-color .2s; color-scheme: dark;
+}
+.cd-set input[type=date]:focus { border-color: var(--warn); box-shadow: 0 0 0 3px rgba(250,188,109,.1); }
+
+.cd-display {
+  display: flex; gap: 16px; flex: 1; justify-content: flex-end; flex-wrap: wrap;
+}
+.cd-unit {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  min-width: 52px;
+}
+.cd-val {
+  font-family: 'Syne', sans-serif; font-size: 32px; font-weight: 800;
+  line-height: 1; color: var(--warn);
+  transition: transform .15s;
+}
+.cd-val.tick { transform: scale(1.12); }
+.cd-lbl { font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+.cd-sep { font-family: 'Syne', sans-serif; font-size: 28px; color: var(--muted); align-self: flex-start; margin-top: 2px; }
+
+.cd-empty { font-size: 11px; color: var(--muted); flex: 1; text-align: right; }
+.cd-past  { font-size: 12px; color: var(--acc3); font-weight: 600; flex: 1; text-align: right; }
+
+.cd-weekdays {
+  width: 100%; display: flex; gap: 8px; align-items: center;
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);
+  font-size: 10px; color: var(--muted);
+}
+.cd-weekdays span { color: var(--warn); }
+
+/* ─── grid ─── */
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media(max-width:700px) { .grid { grid-template-columns: 1fr; } }
+
+.card {
+  background: var(--s1); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 26px;
+  animation: fadeUp .5s ease both;
+}
+.card.span2 { grid-column: span 2; }
+@media(max-width:700px) { .card.span2 { grid-column: span 1; } }
+
+@keyframes fadeUp {
+  from { opacity:0; transform:translateY(14px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+.card:nth-child(1){animation-delay:.04s}
+.card:nth-child(2){animation-delay:.10s}
+.card:nth-child(3){animation-delay:.16s}
+.card:nth-child(4){animation-delay:.22s}
+.card:nth-child(5){animation-delay:.28s}
+
+.card-title {
+  font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 20px;
+  display: flex; align-items: center; gap: 8px;
+}
+.card-title .dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--acc); flex-shrink: 0;
+}
+
+/* ─── form ─── */
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.fg { display: flex; flex-direction: column; gap: 5px; }
+.fg.full { grid-column: span 2; }
+
+label { font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+
+input[type=text], input[type=number], input[type=password], textarea {
+  background: var(--s2); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); font-family: inherit;
+  font-size: 13px; padding: 10px 13px; outline: none; width: 100%;
+  transition: border-color .2s, box-shadow .2s;
+}
+input:focus, textarea:focus {
+  border-color: var(--acc);
+  box-shadow: 0 0 0 3px rgba(124,109,250,.1);
+}
+textarea { resize: vertical; min-height: 58px; font-size: 12px; }
+
+.section-scores {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;
+}
+
+.section-box {
+  background: var(--s2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px;
+}
+.section-box .sec-label {
+  font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.sec-math { color: var(--acc); }
+.sec-rw   { color: var(--acc2); }
+
+.total-preview {
+  text-align: center; margin-bottom: 12px;
+  font-family: 'Syne', sans-serif; font-size: 13px; color: var(--muted);
+}
+.total-preview span {
+  font-size: 28px; font-weight: 800; color: var(--text); margin: 0 6px;
+}
+
+.btn {
+  width: 100%; background: var(--acc); color: #fff;
+  border: none; border-radius: 8px; font-family: inherit;
+  font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 13px; cursor: pointer;
+  transition: background .15s, transform .15s, box-shadow .15s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn:hover { background: #9080fc; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(124,109,250,.3); }
+.btn:active { transform: translateY(0); }
+.btn.loading { opacity: .6; pointer-events: none; }
+
+.spinner {
+  width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.3);
+  border-top-color: #fff; border-radius: 50%;
+  animation: spin .6s linear infinite; display: none;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── stats row ─── */
+.stats-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 16px; }
+.sbox {
+  background: var(--s2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px; text-align: center;
+}
+.sbox .v { font-family: 'Syne', sans-serif; font-size: 30px; font-weight: 800; line-height: 1; }
+.sbox .l { font-size: 9px; letter-spacing: 0.14em; color: var(--muted); text-transform: uppercase; margin-top: 4px; }
+
+.two-sec {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;
+}
+.sec-avg-box {
+  background: var(--s2); border-radius: 10px; padding: 14px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.sec-avg-box .lbl { font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; }
+.sec-avg-box .val { font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 800; line-height: 1; }
+
+/* ─── trend chip ─── */
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 9px; padding: 3px 9px; border-radius: 999px; letter-spacing: .08em;
+}
+.chip.up   { background: rgba(109,250,188,.1); color: var(--acc3); }
+.chip.down { background: rgba(250,109,154,.1); color: var(--acc2); }
+.chip.flat { background: rgba(255,255,255,.05); color: var(--muted); }
+
+/* ─── chart ─── */
+.chart-wrap { position: relative; height: 230px; }
+
+/* ─── prediction ─── */
+.pred-row {
+  display: flex; align-items: center; gap: 14px; margin-top: 16px; flex-wrap: wrap;
+}
+.pred-row label { white-space: nowrap; }
+.pred-row input { width: 80px; padding: 7px 10px; font-size: 12px; }
+.pred-info { font-size: 11px; color: var(--muted); }
+.pred-info .hi { color: var(--acc3); font-weight: 500; }
+.pred-info .warn { color: var(--warn); }
+
+/* ─── history ─── */
+.hist-list {
+  display: flex; flex-direction: column; gap: 10px;
+  max-height: 380px; overflow-y: auto; padding-right: 4px;
+}
+.hist-list::-webkit-scrollbar { width: 3px; }
+.hist-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.hist-item {
+  background: var(--s2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 16px;
+  transition: border-color .2s; animation: fadeUp .3s ease both;
+}
+.hist-item:hover { border-color: var(--border2); }
+
+.hist-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.hist-num { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; color: var(--muted); min-width: 24px; }
+.hist-test { font-size: 13px; flex: 1; }
+.hist-total { font-family: 'Syne', sans-serif; font-size: 24px; font-weight: 800; line-height: 1; }
+.del-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 3px; border-radius: 4px; transition: color .15s; line-height:1; }
+.del-btn:hover { color: var(--acc2); }
+
+.hist-sections {
+  display: flex; gap: 12px; margin-bottom: 8px;
+}
+.hist-sec {
+  font-size: 10px; letter-spacing: .06em;
+  padding: 3px 10px; border-radius: 999px; border: 1px solid;
+}
+.hist-sec.math { color: var(--acc);  border-color: rgba(124,109,250,.3); background: rgba(124,109,250,.08); }
+.hist-sec.rw   { color: var(--acc2); border-color: rgba(250,109,154,.3); background: rgba(250,109,154,.08); }
+
+.hist-bar-wrap { height: 3px; background: var(--border); border-radius: 2px; margin-bottom: 8px; overflow: hidden; }
+.hist-bar { height: 100%; border-radius: 2px; transition: width .6s ease; }
+
+.hist-note { font-size: 11px; color: var(--muted); font-style: italic; margin-bottom: 8px; }
+
+/* ─── AI feedback ─── */
+.ai-box {
+  background: rgba(124,109,250,.07); border: 1px solid rgba(124,109,250,.2);
+  border-radius: 8px; padding: 12px 14px; margin-top: 6px;
+  font-size: 12px; color: var(--text); line-height: 1.6;
+  position: relative;
+}
+.ai-box::before {
+  content: 'AI Coach';
+  display: block; font-size: 8px; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--acc); margin-bottom: 6px;
+}
+
+/* ─── toast ─── */
+#toast {
+  position: fixed; bottom: 28px; left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--s2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 11px 22px;
+  font-size: 12px; z-index: 1000; opacity: 0;
+  transition: transform .3s cubic-bezier(.34,1.56,.64,1), opacity .3s;
+  white-space: nowrap;
+}
+#toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+#toast.ok  { border-color: var(--acc3); color: var(--acc3); }
+#toast.err { border-color: var(--acc2); color: var(--acc2); }
+
+.empty { text-align: center; padding: 40px; color: var(--muted); font-size: 12px; }
+.empty .ico { font-size: 28px; margin-bottom: 10px; opacity: .4; }
+</style>
+</head>
+<body>
+<div class="blob b1"></div>
+<div class="blob b2"></div>
+<div class="wrap">
+
+  <!-- Header -->
+  <header>
+    <div class="logo-area">
+      <span class="logo-tag">Score Tracker</span>
+      <h1>SAT<br><em>Analytics</em></h1>
+    </div>
+    <div class="header-right">
+      <div class="hstat-val" id="hBest">—</div>
+      <div class="hstat-lbl">Personal Best</div>
+    </div>
+  </header>
+
+  <!-- API Key banner -->
+  <div class="key-banner">
+    <label>OpenAI API Key</label>
+    <input type="password" id="apiKey" placeholder="sk-..." />
+    <div class="key-note">Optional — enables <span>AI coaching feedback</span> after each test entry.</div>
+  </div>
+
+  <!-- Countdown banner -->
+  <div class="countdown-banner">
+    <div class="cd-set">
+      <label>SAT Test Date</label>
+      <input type="date" id="testDate" oninput="saveAndTickCountdown()" />
+    </div>
+    <div class="cd-display" id="cdDisplay">
+      <span class="cd-empty">Set your test date to start the countdown.</span>
+    </div>
+    <div class="cd-weekdays" id="cdWeekdays" style="display:none"></div>
+  </div>
+
+  <div class="grid">
+
+    <!-- Log score -->
+    <div class="card">
+      <div class="card-title"><div class="dot"></div>Log New Test</div>
+
+      <div class="form-row">
+        <div class="fg full">
+          <label>Practice Test Name</label>
+          <input type="text" id="testInput" placeholder="e.g. PT 10, Khan Full #3" />
+        </div>
+      </div>
+
+      <div class="section-scores">
+        <div class="section-box">
+          <div class="sec-label sec-math">Math Score</div>
+          <input type="number" id="mathInput" placeholder="200 – 800" min="200" max="800" oninput="updatePreview()" />
+        </div>
+        <div class="section-box">
+          <div class="sec-label sec-rw">Reading &amp; Writing</div>
+          <input type="number" id="rwInput" placeholder="200 – 800" min="200" max="800" oninput="updatePreview()" />
+        </div>
+      </div>
+
+      <div class="total-preview" id="totalPreview">Total <span>—</span></div>
+
+      <div class="form-row">
+        <div class="fg full">
+          <label>Session Notes (optional)</label>
+          <textarea id="noteInput" placeholder="e.g. Ran out of time on module 2 math..."></textarea>
+        </div>
+      </div>
+
+      <button class="btn" id="saveBtn" onclick="addScore()">
+        <span class="spinner" id="btnSpinner"></span>
+        <span id="btnText">→ Save &amp; Analyze</span>
+      </button>
+    </div>
+
+    <!-- Overview stats -->
+    <div class="card">
+      <div class="card-title"><div class="dot" style="background:var(--acc3)"></div>Overview</div>
+
+      <div class="stats-row">
+        <div class="sbox"><div class="v" id="sBest" style="color:var(--acc3)">—</div><div class="l">Best</div></div>
+        <div class="sbox"><div class="v" id="sAvg">—</div><div class="l">Avg</div></div>
+        <div class="sbox"><div class="v" id="sLast" style="color:var(--acc)">—</div><div class="l">Latest</div></div>
+      </div>
+
+      <div class="two-sec">
+        <div class="sec-avg-box">
+          <div class="lbl sec-math">Avg Math</div>
+          <div class="val" id="sAvgMath" style="color:var(--acc)">—</div>
+        </div>
+        <div class="sec-avg-box">
+          <div class="lbl sec-rw">Avg R&amp;W</div>
+          <div class="val" id="sAvgRW" style="color:var(--acc2)">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="card span2">
+      <div class="card-title" style="margin-bottom:16px">
+        <div class="dot" style="background:var(--acc2)"></div>
+        Score Trajectory
+        <span id="trendChip" class="chip flat" style="display:none"></span>
+      </div>
+      <div class="chart-wrap"><canvas id="chart"></canvas></div>
+
+      <div class="pred-row">
+        <label>Goal Score</label>
+        <input type="number" id="goalInput" placeholder="1500" min="400" max="1600" oninput="updatePrediction()" />
+        <div class="pred-info" id="predInfo"></div>
+      </div>
+    </div>
+
+    <!-- History -->
+    <div class="card span2">
+      <div class="card-title"><div class="dot" style="background:var(--warn)"></div>Score History</div>
+      <div class="hist-list" id="histList">
+        <div class="empty"><div class="ico">📋</div>No scores yet — log your first test.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let scores = [], chartInst = null;
+
+// ── helpers ──────────────────────────────────────────────
+function escH(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function avg(arr){ return arr.length ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length) : null; }
+
+function scoreColor(s){
+  if(s>=1400) return 'var(--acc3)';
+  if(s>=1200) return 'var(--acc)';
+  return 'var(--acc2)';
+}
+
+function showToast(msg, type=''){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className=`show ${type}`;
+  clearTimeout(t._t); t._t=setTimeout(()=>t.className='',3000);
+}
+
+function updatePreview(){
+  const m=parseInt(document.getElementById('mathInput').value)||0;
+  const r=parseInt(document.getElementById('rwInput').value)||0;
+  const el=document.getElementById('totalPreview');
+  if(m>=200&&r>=200) el.innerHTML=`Total <span>${m+r}</span>`;
+  else el.innerHTML='Total <span>—</span>';
+}
+
+// ── fetch & render ────────────────────────────────────────
+async function fetchScores(){
+  const res=await fetch('/api/scores');
+  scores=await res.json();
+  render();
+}
+
+function render(){
+  renderStats(); renderChart(); renderHistory(); updatePrediction();
+}
+
+// ── add score ─────────────────────────────────────────────
+async function addScore(){
+  const test=document.getElementById('testInput').value.trim();
+  const mathRaw=document.getElementById('mathInput').value.trim();
+  const rwRaw=document.getElementById('rwInput').value.trim();
+  const note=document.getElementById('noteInput').value.trim();
+  const apiKey=document.getElementById('apiKey').value.trim();
+
+  if(!test){ showToast('Please enter a test name.','err'); return; }
+  if(!mathRaw){ showToast('Please enter your Math score.','err'); return; }
+  if(!rwRaw){ showToast('Please enter your R&W score.','err'); return; }
+
+  const math=parseInt(mathRaw, 10);
+  const rw=parseInt(rwRaw, 10);
+
+  if(isNaN(math)){ showToast('Math score must be a whole number.','err'); return; }
+  if(isNaN(rw)){ showToast('R&W score must be a whole number.','err'); return; }
+  if(math<200||math>800){ showToast(`Math score ${math} is out of range (200–800).`,'err'); return; }
+  if(rw<200||rw>800){ showToast(`R&W score ${rw} is out of range (200–800).`,'err'); return; }
+
+  // loading state
+  const btn=document.getElementById('saveBtn');
+  const sp=document.getElementById('btnSpinner');
+  const bt=document.getElementById('btnText');
+  btn.classList.add('loading'); sp.style.display='block';
+  bt.textContent= apiKey ? 'Saving & Getting AI Feedback…' : 'Saving…';
+
+  const res=await fetch('/api/scores',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({test,math:parseInt(math),rw:parseInt(rw),note,api_key:apiKey})
+  });
+  const data=await res.json();
+
+  btn.classList.remove('loading'); sp.style.display='none'; bt.textContent='→ Save & Analyze';
+
+  if(!res.ok){ showToast(data.error,'err'); return; }
+
+  document.getElementById('testInput').value='';
+  document.getElementById('mathInput').value='';
+  document.getElementById('rwInput').value='';
+  document.getElementById('noteInput').value='';
+  document.getElementById('totalPreview').innerHTML='Total <span>—</span>';
+
+  const msg = data.entry.ai_feedback ? 'Saved! AI feedback generated ✓' : 'Score saved!';
+  showToast(msg,'ok');
+  fetchScores();
+}
+
+async function deleteScore(i){
+  const res=await fetch(`/api/scores/${i}`,{method:'DELETE'});
+  if(res.ok){ fetchScores(); showToast('Entry removed.',''); }
+}
+
+// ── stats ─────────────────────────────────────────────────
+function renderStats(){
+  if(!scores.length){
+    ['sBest','sAvg','sLast','sAvgMath','sAvgRW','hBest'].forEach(id=>document.getElementById(id).textContent='—');
+    return;
+  }
+  const tots=scores.map(s=>s.total);
+  const mths=scores.map(s=>s.math);
+  const rws=scores.map(s=>s.rw);
+  const best=Math.max(...tots);
+  document.getElementById('sBest').textContent=best;
+  document.getElementById('sAvg').textContent=avg(tots);
+  document.getElementById('sLast').textContent=tots[tots.length-1];
+  document.getElementById('sAvgMath').textContent=avg(mths);
+  document.getElementById('sAvgRW').textContent=avg(rws);
+  document.getElementById('hBest').textContent=best;
+}
+
+// ── chart ─────────────────────────────────────────────────
+function renderChart(){
+  const ctx=document.getElementById('chart').getContext('2d');
+  if(chartInst) chartInst.destroy();
+  if(!scores.length) return;
+
+  const labels=scores.map(s=>s.test);
+  const tots=scores.map(s=>s.total);
+  const mths=scores.map(s=>s.math);
+  const rws=scores.map(s=>s.rw);
+
+  // trend chip
+  const chip=document.getElementById('trendChip');
+  if(tots.length>=2){
+    const d=tots[tots.length-1]-tots[tots.length-2];
+    chip.style.display='inline-flex';
+    if(d>0){chip.className='chip up';chip.textContent=`↑ +${d} from last`;}
+    else if(d<0){chip.className='chip down';chip.textContent=`↓ ${d} from last`;}
+    else{chip.className='chip flat';chip.textContent='= same as last';}
+  } else chip.style.display='none';
+
+  const gTotal=ctx.createLinearGradient(0,0,0,230);
+  gTotal.addColorStop(0,'rgba(124,109,250,.2)');
+  gTotal.addColorStop(1,'rgba(124,109,250,0)');
+
+  chartInst=new Chart(ctx,{
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {
+          label:'Total',
+          data:tots,
+          borderColor:'#7c6dfa', borderWidth:2.5,
+          backgroundColor:gTotal,
+          pointBackgroundColor:tots.map(scoreColor),
+          pointBorderColor:'var(--bg)', pointBorderWidth:2,
+          pointRadius:6, pointHoverRadius:9,
+          fill:true, tension:.38, yAxisID:'y'
+        },
+        {
+          label:'Math',
+          data:mths,
+          borderColor:'rgba(124,109,250,.55)', borderWidth:1.5,
+          borderDash:[4,4], pointRadius:3,
+          fill:false, tension:.38, yAxisID:'y2'
+        },
+        {
+          label:'R&W',
+          data:rws,
+          borderColor:'rgba(250,109,154,.55)', borderWidth:1.5,
+          borderDash:[4,4], pointRadius:3,
+          fill:false, tension:.38, yAxisID:'y2'
+        }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{
+        legend:{
+          display:true,
+          labels:{ color:'#555870', font:{family:'JetBrains Mono',size:10}, boxWidth:12, padding:16 }
+        },
+        tooltip:{
+          backgroundColor:'#141522', borderColor:'rgba(255,255,255,.08)', borderWidth:1,
+          titleColor:'#7c6dfa', bodyColor:'#e8eaf6', padding:12,
+          callbacks:{
+            title:c=>c[0].label,
+            label:c=>`${c.dataset.label}: ${c.raw}`
+          }
+        }
+      },
+      scales:{
+        x:{
+          grid:{color:'rgba(255,255,255,.03)'},
+          ticks:{color:'#555870',font:{family:'JetBrains Mono',size:10}},
+          border:{color:'rgba(255,255,255,.05)'}
+        },
+        y:{
+          min:400,max:1600,
+          grid:{color:'rgba(255,255,255,.03)'},
+          ticks:{color:'#555870',font:{family:'JetBrains Mono',size:10},stepSize:200},
+          border:{color:'rgba(255,255,255,.05)'},
+          title:{display:true,text:'Total',color:'#555870',font:{family:'JetBrains Mono',size:9}}
+        },
+        y2:{
+          position:'right', min:200, max:800,
+          grid:{drawOnChartArea:false},
+          ticks:{color:'#555870',font:{family:'JetBrains Mono',size:10},stepSize:100},
+          border:{color:'rgba(255,255,255,.05)'},
+          title:{display:true,text:'Section',color:'#555870',font:{family:'JetBrains Mono',size:9}}
+        }
+      }
+    }
+  });
+}
+
+// ── prediction (linear regression) ───────────────────────
+function updatePrediction(){
+  const goal=parseInt(document.getElementById('goalInput').value);
+  const el=document.getElementById('predInfo');
+
+  if(!scores.length){ el.innerHTML=''; return; }
+
+  const tots=scores.map(s=>s.total);
+  const last=tots[tots.length-1];
+
+  if(scores.length < 2){
+    if(goal){ el.innerHTML=`<span class="hi">${goal-last > 0 ? goal-last+' pts to go' : 'Goal reached ✓'}</span>`; }
+    else el.innerHTML='';
+    return;
+  }
+
+  // simple linear regression
+  const n=tots.length;
+  const xs=[...Array(n).keys()];
+  const xm=xs.reduce((a,b)=>a+b,0)/n;
+  const ym=tots.reduce((a,b)=>a+b,0)/n;
+  const num=xs.reduce((s,x,i)=>s+(x-xm)*(tots[i]-ym),0);
+  const den=xs.reduce((s,x)=>s+(x-xm)**2,0);
+  const slope=den?num/den:0;
+  const intercept=ym-slope*xm;
+
+  let html='';
+  if(slope>0) html+=`<span class="hi">+${slope.toFixed(1)} pts/test avg improvement</span>`;
+  else if(slope<0) html+=`<span class="warn">${slope.toFixed(1)} pts/test trend</span>`;
+  else html+=`<span>Flat trend so far</span>`;
+
+  if(goal && slope>0){
+    const needed=(goal-intercept)/slope;
+    const tests=Math.max(0,Math.ceil(needed-n+1));
+    if(last>=goal) html+=` · <span class="hi">Goal reached ✓</span>`;
+    else html+=` · ~${tests} more test${tests!==1?'s':''} to reach ${goal}`;
+  } else if(goal){
+    html+=` · ${goal-last} pts to goal`;
+  }
+
+  el.innerHTML=html;
+}
+
+// ── history ───────────────────────────────────────────────
+function renderHistory(){
+  const list=document.getElementById('histList');
+  if(!scores.length){
+    list.innerHTML='<div class="empty"><div class="ico">📋</div>No scores yet — log your first test.</div>';
+    return;
+  }
+
+  list.innerHTML=scores.map((s,i)=>{
+    const pct=((s.total-400)/1200*100).toFixed(1);
+    const col=scoreColor(s.total);
+    return `
+    <div class="hist-item">
+      <div class="hist-top">
+        <div class="hist-num">${String(i+1).padStart(2,'0')}</div>
+        <div class="hist-test">${escH(s.test)}</div>
+        <div class="hist-total" style="color:${col}">${s.total}</div>
+        <button class="del-btn" onclick="deleteScore(${i})" title="Remove">✕</button>
+      </div>
+      <div class="hist-sections">
+        <span class="hist-sec math">Math ${s.math}</span>
+        <span class="hist-sec rw">R&W ${s.rw}</span>
+      </div>
+      <div class="hist-bar-wrap"><div class="hist-bar" style="width:${pct}%;background:${col}"></div></div>
+      ${s.note?`<div class="hist-note">${escH(s.note)}</div>`:''}
+      ${s.ai_feedback?`<div class="ai-box">${escH(s.ai_feedback)}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+// ── countdown ─────────────────────────────────────────────
+let cdTimer = null;
+
+function saveAndTickCountdown(){
+  const val = document.getElementById('testDate').value;
+  if(val) localStorage.setItem('sat_test_date', val);
+  else localStorage.removeItem('sat_test_date');
+  startCountdown();
+}
+
+function startCountdown(){
+  if(cdTimer) clearInterval(cdTimer);
+  tickCountdown();
+  cdTimer = setInterval(tickCountdown, 1000);
+}
+
+function tickCountdown(){
+  const val = document.getElementById('testDate').value;
+  const disp = document.getElementById('cdDisplay');
+  const wkEl = document.getElementById('cdWeekdays');
+
+  if(!val){
+    disp.innerHTML='<span class="cd-empty">Set your test date to start the countdown.</span>';
+    wkEl.style.display='none';
+    return;
+  }
+
+  const [y,m,d] = val.split('-').map(Number);
+  const target = new Date(y, m-1, d, 0, 0, 0, 0);
+  const now = new Date();
+  const diff = target - now;
+
+  if(diff <= 0){
+    disp.innerHTML='<span class="cd-past">🎉 Test day is here (or has passed) — good luck!</span>';
+    wkEl.style.display='none';
+    return;
+  }
+
+  const totalSecs = Math.floor(diff / 1000);
+  const days  = Math.floor(totalSecs / 86400);
+  const hours = Math.floor((totalSecs % 86400) / 3600);
+  const mins  = Math.floor((totalSecs % 3600) / 60);
+  const secs  = totalSecs % 60;
+  const pad = n => String(n).padStart(2,'0');
+
+  disp.innerHTML = `
+    <div class="cd-unit"><div class="cd-val">${days}</div><div class="cd-lbl">Days</div></div>
+    <div class="cd-sep">:</div>
+    <div class="cd-unit"><div class="cd-val">${pad(hours)}</div><div class="cd-lbl">Hrs</div></div>
+    <div class="cd-sep">:</div>
+    <div class="cd-unit"><div class="cd-val">${pad(mins)}</div><div class="cd-lbl">Min</div></div>
+    <div class="cd-sep">:</div>
+    <div class="cd-unit"><div class="cd-val">${pad(secs)}</div><div class="cd-lbl">Sec</div></div>
+  `;
+
+  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const studyDays = Math.floor(diff / 86400000);
+  const weekdays = Math.floor(studyDays * 5 / 7);
+  const dayOfWeek = dayNames[target.getDay()];
+  const dateStr = target.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+
+  wkEl.style.display = 'flex';
+  wkEl.innerHTML = `
+    Test on <span>${dayOfWeek}, ${dateStr}</span>
+    &nbsp;·&nbsp; ${studyDays} days total
+    &nbsp;·&nbsp; ~<span>${weekdays}</span> weekdays to study
+  `;
+}
+
+// Restore saved date on page load
+(function(){
+  const saved = localStorage.getItem('sat_test_date');
+  if(saved){ document.getElementById('testDate').value = saved; startCountdown(); }
+})();
+
+fetchScores();
+</script>
+</body>
+</html>
